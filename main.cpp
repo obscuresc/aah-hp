@@ -16,6 +16,7 @@ Jack Arney 22-06-19
 
 #include <iostream>
 #include <fstream>
+#include <ftd2xx.h>
 // #include <cufft.h>
 
 #define NX 256
