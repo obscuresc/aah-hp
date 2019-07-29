@@ -38,29 +38,53 @@ Jack Arney 22-06-19
 
 /******************************************************************************/
 
+/*
+steps
+  create plan
+  assemble data (R, C etc)
+  assign plan
+    decide if in place or out of place
+    streamed
+    batches
+    strides
+  set call backs
+  execute
+  clean up
+*/
 
 /* perform one dimensional fft */
 /* takes data location, number of elements in dimesions of in and out data */
-void fft1d(unsigned int inembed, unsigned int oembed) {
+void fft1d(int inembed, int oembed) {
 
-  /* setup configuration */
+  /* create plan for performing fft */
   cufftHandle plan;
-  cufftComplex *data;
+  if (cufftPlan1d(&plan, NX, CUFFT_R2C, BATCH) != CUFFT_SUCCESS) {
+    printf("Failed to create 1D plan\n");
+    return;
+  }
 
-  /* load data */
+  /* assemble data */
+  cufftReal *idata;
+  cufftComplex *odata;
+  cudaMalloc((void**) &idata, sizeof(cufftComplex)*NX*BATCH);
+  if (cudaGetLastError() != cudaSuccess) {
+    printf("Failed to load time data to memory\n");
+    return;
+  }
 
-  /* push data to graphics card*/
-  cudaMalloc((void**)&data, sizeof(cufftComplex)*NX*BATCH);
-  cufftPlanMany(&plan, RANK, NX, &inembed, ISTRIDE, IDIST,
-                &oembed, OSTRIDE, ODIST, CUFFT_R2C, BATCH);
+  /* perform fft in place*/
+  if (cufftExecR2C(plan, idata, odata) != CUFFT_SUCCESS) {
+    printf("Failed to perform perform forward fft.\n");
+  }
 
-  /* perform fft */
-  cufftExecR2C(plant, data, data, CUFFT_FORWARD);
-  cudaDeviceSynchronize();
+  /* blocks until fft complete */
+  if (cudaDeviceSynchronize() != cudaSuccess) {
+    printf("Failed to synchronise.\n");
+  }
 
   /* clean up */
   cufftDestroy(plan);
-  cudaFree(data);
+  cudaFree(idata);
 
 }
 
@@ -89,6 +113,6 @@ int main() {
     free(tmp);
   }
 
-  fft1d();
+  fft1d(3, 4);
   return 0;
 }

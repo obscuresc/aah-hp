@@ -1,7 +1,8 @@
 # compiler
-CC=g++
-CC_FLAGS=
-CC_LIBS=
+#CC = g++
+CC = nvcc
+CC_FLAGS =
+CC_LIBS =
 
 # other project files, .o files,  header files
 SRC_DIR = src
@@ -16,7 +17,7 @@ OBJS = $(OBJ_DIR)/main.o
 
 # build
 $(EXE) : $(OBJS)
-	$(CC) $(CC_FLAGS) $(OBJS) -o $@
+	$(CC) $(CC_FLAGS) -lcuda -lcufft $(OBJS) -o  $@
 
 # Compile main .cpp file to object files:
 $(OBJ_DIR)/%.o : %.cpp
