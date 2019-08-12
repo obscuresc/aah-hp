@@ -26,6 +26,7 @@ Jack Arney 22-06-19
 #include <netdb.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include <cuda_runtime_api.h>
 #include <cufft.h>
@@ -45,30 +46,18 @@ Jack Arney 22-06-19
 #define TYPE          SOCK_DGRAM  // udp (SOCK_DGRAM) or tcp (SOCK_STREAM)
 
 // server settings
-#define BACKQUEUE     5           // max queue of connections
+#define BACKQUEUE     5           // max connections in queue
 #define PORTNUM       8080
 
 // client settings
+#define PACKET_DATA   "message contents"
 
 
 
 /******************************************************************************/
 
-/*
-steps
-  create plan
-  assemble data (R, C etc)
-  assign plan
-    decide if in place or out of place
-    streamed
-    batches
-    strides
-  set call backs
-  execute
-  clean up
-*/
 
-// initiate transport layer service
+// initiate transport layer service server
 bool comms_init() {
 
   // create and check status of socket
@@ -111,6 +100,63 @@ bool comms_init() {
   return 1;
 }
 
+
+bool client_recv() {
+
+  // create client socket
+  int client_socket;
+  struct sockaddr_in server_addr;
+  struct hostent *server;
+  client_socket = socket(DOMAIN, TYPE, PROTOCOL);
+  if(client_socket < 0) {
+    printf("Communications error: Failed to create socket.\n");
+    return -1;
+  }
+
+  server_addr.sin_family = DOMAIN;
+  server_addr.sin_port = htons(PORTNUM);
+  if(connect(client_socket, (struct sockaddr *) &server_addr,
+    sizeof(server_addr)) < 0) {
+
+    printf("Communications error: Failed to connect to server.\n");
+    return -1;
+  }
+
+  // create packet and send
+  int n;
+  n = write(client_socket, PACKET_DATA, strlen(PACKET_DATA));
+  if(n < 0) {
+    printf("Communications error: Could not write to socket.\n");
+    return -1;
+  }
+
+  // read response
+  char buffer[256];
+  n = read(client_socket, buffer, 255);
+  if(n < 0) {
+    printf("Communications error: Could not read from socket.\n");
+    return -1;
+  }
+  printf("%s\n", buffer);
+
+  // clean up
+  close(client_socket);
+  return 1;
+}
+
+/*
+steps
+  create plan
+  assemble data (R, C etc)
+  assign plan
+    decide if in place or out of place
+    streamed
+    batches
+    strides
+  set call backs
+  execute
+  clean up
+*/
 
 // perform one dimensional fft
 // takes data location, number of elements in dimesions of in and out data
