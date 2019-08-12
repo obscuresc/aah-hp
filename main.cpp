@@ -20,20 +20,36 @@ Jack Arney 22-06-19
 
 #include <iostream>
 #include <fstream>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netdb.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include <cuda_runtime_api.h>
 #include <cufft.h>
 
-/* cuda macros */
-#define NX            256       /* number of points */
-#define BATCH         1         /* number of ffts to perform */
-#define RANK          1         /*  */
-#define IDIST         1         /* distance between 1st elements of batches */
-#define ISTRIDE       1         /* do every ISTRIDEth index */
-#define ODIST         1         /* distance between 1st elements of output */
-#define OSTRIDE       1         /* distance between output elements */
+// cuda macros
+#define NX            256         // number of points
+#define BATCH         1           // number of ffts to perform
+#define RANK          1           //
+#define IDIST         1           // distance between 1st elements of batches
+#define ISTRIDE       1           // do every ISTRIDEth index
+#define ODIST         1           // distance between 1st elements of output
+#define OSTRIDE       1           // distance between output elements
+
+// socket macros
+#define DOMAIN        AF_INET     // ipv4 (AF_INET) or ipv6 (AF_INET6)
+#define PROTOCOL      0           // default
+#define TYPE          SOCK_DGRAM  // udp (SOCK_DGRAM) or tcp (SOCK_STREAM)
+
+// server settings
+#define BACKQUEUE     5           // max queue of connections
+#define PORTNUM       8080
+
+// client settings
+
 
 
 /******************************************************************************/
@@ -52,18 +68,62 @@ steps
   clean up
 */
 
-/* perform one dimensional fft */
-/* takes data location, number of elements in dimesions of in and out data */
+// initiate transport layer service
+bool comms_init() {
+
+  // create and check status of socket
+  int udp_socket = socket(DOMAIN, TYPE, PROTOCOL);
+  if(udp_socket < 0) {
+    printf("Communications error: Failed to create socket.\n");
+    return -1;
+  }
+
+  // setup address
+  struct sockaddr_in server_addr;
+  struct sockaddr_in client_addr;
+  server_addr.sin_family = DOMAIN;
+  server_addr.sin_addr.s_addr = INADDR_ANY;
+  server_addr.sin_port = htons(PORTNUM);          // convert to req. endianness
+
+  // bind
+  if(bind(udp_socket, (struct sockaddr *) &server_addr,
+    sizeof(server_addr) < 0)) {
+
+    printf("Communications error: Failed to bind socket.\n");
+    return -1;
+  }
+
+  // listen
+  listen(udp_socket, BACKQUEUE);
+
+  // accept connections with allocated socket
+  socklen_t client_length = sizeof(client_addr);
+  int new_udp_socket = accept(udp_socket,
+    (struct sockaddr *) &client_addr, &client_length);
+  if(new_udp_socket < 0) {
+    printf("Communications error: Failed to accept connection.\n");
+    return -1;
+  }
+
+  // send
+  send(new_udp_socket, "Hello, world!\n", 13, 0);
+
+  return 1;
+}
+
+
+// perform one dimensional fft
+// takes data location, number of elements in dimesions of in and out data
 void fft1d(int inembed, int oembed) {
 
-  /* create plan for performing fft */
+  // create plan for performing fft
   cufftHandle plan;
   if (cufftPlan1d(&plan, NX, CUFFT_R2C, BATCH) != CUFFT_SUCCESS) {
     printf("Failed to create 1D plan\n");
     return;
   }
 
-  /* assemble data */
+  // assemble data
   cufftReal *idata;
   cufftComplex *odata;
   cudaMalloc((void**) &idata, sizeof(cufftComplex)*NX*BATCH);
@@ -72,17 +132,17 @@ void fft1d(int inembed, int oembed) {
     return;
   }
 
-  /* perform fft in place*/
+  // perform fft in place*/
   if (cufftExecR2C(plan, idata, odata) != CUFFT_SUCCESS) {
     printf("Failed to perform perform forward fft.\n");
   }
 
-  /* blocks until fft complete */
+  // blocks until fft complete
   if (cudaDeviceSynchronize() != cudaSuccess) {
     printf("Failed to synchronise.\n");
   }
 
-  /* clean up */
+  // clean up
   cufftDestroy(plan);
   cudaFree(idata);
 
@@ -103,16 +163,18 @@ const char* getfield(char* line, int num) {
 
 int main() {
 
-  FILE* stream = fopen("time_data.txt", "r");
+  comms_init();
 
-  char line[1024];
-  while(fgets(line, 1024, stream)) {
-
-    char * tmp = strdup(line);
-    printf("Field 3 would be %s\n", getfield(tmp, 3));
-    free(tmp);
-  }
-
-  fft1d(3, 4);
+  // FILE* stream = fopen("time_data.txt", "r");
+  //
+  // char line[1024];
+  // while(fgets(line, 1024, stream)) {
+  //
+  //   char * tmp = strdup(line);
+  //   printf("Field 3 would be %s\n", getfield(tmp, 3));
+  //   free(tmp);
+  // }
+  //
+  // fft1d(3, 4);
   return 0;
 }
