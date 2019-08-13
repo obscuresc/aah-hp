@@ -58,50 +58,51 @@ Jack Arney 22-06-19
 
 
 // initiate transport layer service server
-bool comms_init() {
+// bool comms_init() {
+//
+//   // create and check status of socket
+//   int udp_socket = socket(DOMAIN, TYPE, PROTOCOL);
+//   if(udp_socket < 0) {
+//     printf("Communications error: Failed to create socket.\n");
+//     return -1;
+//   }
+//
+//   // setup address
+//   struct sockaddr_in server_addr;
+//   struct sockaddr_in client_addr;
+//   server_addr.sin_family = DOMAIN;
+//   server_addr.sin_addr.s_addr = INADDR_ANY;
+//   server_addr.sin_port = htons(PORTNUM);          // convert to req. endianness
+//
+//   // bind
+//   if(bind(udp_socket, (struct sockaddr *) &server_addr,
+//     sizeof(server_addr) < 0)) {
+//
+//     printf("Communications error: Failed to bind socket.\n");
+//     return -1;
+//   }
+//
+//   // listen
+//   listen(udp_socket, BACKQUEUE);
+//
+//   // accept connections with allocated socket
+//   socklen_t client_length = sizeof(client_addr);
+//   int new_udp_socket = accept(udp_socket,
+//     (struct sockaddr *) &client_addr, &client_length);
+//   if(new_udp_socket < 0) {
+//     printf("Communications error: Failed to accept connection.\n");
+//     return -1;
+//   }
+//
+//   // send
+//   send(new_udp_socket, "Hello, world!\n", 13, 0);
+//
+//   return 1;
+// }
 
-  // create and check status of socket
-  int udp_socket = socket(DOMAIN, TYPE, PROTOCOL);
-  if(udp_socket < 0) {
-    printf("Communications error: Failed to create socket.\n");
-    return -1;
-  }
 
-  // setup address
-  struct sockaddr_in server_addr;
-  struct sockaddr_in client_addr;
-  server_addr.sin_family = DOMAIN;
-  server_addr.sin_addr.s_addr = INADDR_ANY;
-  server_addr.sin_port = htons(PORTNUM);          // convert to req. endianness
-
-  // bind
-  if(bind(udp_socket, (struct sockaddr *) &server_addr,
-    sizeof(server_addr) < 0)) {
-
-    printf("Communications error: Failed to bind socket.\n");
-    return -1;
-  }
-
-  // listen
-  listen(udp_socket, BACKQUEUE);
-
-  // accept connections with allocated socket
-  socklen_t client_length = sizeof(client_addr);
-  int new_udp_socket = accept(udp_socket,
-    (struct sockaddr *) &client_addr, &client_length);
-  if(new_udp_socket < 0) {
-    printf("Communications error: Failed to accept connection.\n");
-    return -1;
-  }
-
-  // send
-  send(new_udp_socket, "Hello, world!\n", 13, 0);
-
-  return 1;
-}
-
-
-bool client_recv() {
+// sends calculation from PC to remote raspberry pi
+bool send_dev_rpi(char * message) {
 
   // create client socket
   int client_socket;
@@ -115,29 +116,11 @@ bool client_recv() {
 
   server_addr.sin_family = DOMAIN;
   server_addr.sin_port = htons(PORTNUM);
-  if(connect(client_socket, (struct sockaddr *) &server_addr,
-    sizeof(server_addr)) < 0) {
-
-    printf("Communications error: Failed to connect to server.\n");
-    return -1;
-  }
+  server_addr.sin_addr.s_addr = INADDR_ANY;
 
   // create packet and send
-  int n;
-  n = write(client_socket, PACKET_DATA, strlen(PACKET_DATA));
-  if(n < 0) {
-    printf("Communications error: Could not write to socket.\n");
-    return -1;
-  }
-
-  // read response
-  char buffer[256];
-  n = read(client_socket, buffer, 255);
-  if(n < 0) {
-    printf("Communications error: Could not read from socket.\n");
-    return -1;
-  }
-  printf("%s\n", buffer);
+  sendto(client_socket, message, strlen(message), MSG_CONFIRM,
+        (const struct sockaddr *) &server_addr, sizeof(server_addr));
 
   // clean up
   close(client_socket);
@@ -221,6 +204,9 @@ const char* getfield(char* line, int num) {
 
 int main() {
 
+  char * message = "C++ default message";
+  send_dev_rpi(message);
+
   // comms_init();
 
   // FILE* stream = fopen("time_data.txt", "r");
@@ -233,6 +219,6 @@ int main() {
   //   free(tmp);
   // }
   //
-  fft1d();
+  // fft1d();
   return 0;
 }

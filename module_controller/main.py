@@ -7,18 +7,17 @@ VERSION = socket.AF_INET
 PROTOCOL = socket.SOCK_DGRAM
 
 # start server
-with socket.socket(VERSION, PROTOCOL) as server:
+server = socket.socket(VERSION, PROTOCOL)
 
-    # bind server and wait for connections
-    server.bind((HOST, PORT))
-    s.listen()
+# bind server and wait for connections
+server.bind((HOST, PORT))
 
-    # accept incoming request
-    conn, addr = s.accept()
-    with conn:
-        print('Connected by', addr)
-        while True:
-            data = conn.recv(1024)
-            if not data:
-                break
-            conn.sendall(data)
+
+# accept incoming packets
+while True:
+    print("Waiting to recv")
+    data, addr = server.recvfrom(1024)
+    print("Waiting...")
+    print(data)
+
+print("Complete")
