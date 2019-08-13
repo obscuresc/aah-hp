@@ -1,7 +1,7 @@
 # compiler
 #CC = g++
 CC = nvcc
-CC_FLAGS = -Wwrite-strings
+CC_FLAGS =
 CC_LIBS =
 
 # other project files, .o files,  header files
