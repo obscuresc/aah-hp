@@ -179,6 +179,7 @@ void fft1d() {
   // can return errors from previous cuda calls if they haven't been caught
   cufftComplex *out_temp_data;
   size_t num_bytes = (NX/2 + 1)*sizeof(cufftComplex);
+  out_temp_data = new cufftComplex[NX/2 + 1];
   cudaMemcpy(out_temp_data, odata, num_bytes, cudaMemcpyDeviceToHost);
   int error_value = cudaGetLastError();
   printf("cudaMemcpy from device state: %i\n", error_value);
@@ -187,11 +188,12 @@ void fft1d() {
     return;
   }
 
-  // for (size_t i = 0; i < (NX/2 + 1); i++) {
-  //   printf("%lu %f %f\n", i, out_temp_data[i].x, out_temp_data[i].y);
-  // }
+  for (size_t i = 0; i < (NX/2 + 1); i++) {
+    printf("%lu %f %f\n", i, out_temp_data[i].x, out_temp_data[i].y);
+  }
 
   // clean up
+  delete(out_temp_data);
   cufftDestroy(plan);
   cudaFree(idata);
 
