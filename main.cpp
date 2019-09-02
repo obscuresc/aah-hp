@@ -29,6 +29,7 @@ Jack Arney 22-06-19
 #include <unistd.h>
 
 #include <opencv2/core.hpp>
+#include <opencv2/videoio.hpp>
 
 #include <cuda_runtime_api.h>
 #include <cufft.h>
@@ -53,48 +54,6 @@ Jack Arney 22-06-19
 /******************************************************************************/
 
 
-// initiate transport layer service server
-// bool comms_init() {
-//
-//   // create and check status of socket
-//   int udp_socket = socket(DOMAIN, TYPE, PROTOCOL);
-//   if(udp_socket < 0) {
-//     printf("Communications error: Failed to create socket.\n");
-//     return -1;
-//   }
-//
-//   // setup address
-//   struct sockaddr_in server_addr;
-//   struct sockaddr_in client_addr;
-//   server_addr.sin_family = DOMAIN;
-//   server_addr.sin_addr.s_addr = INADDR_ANY;
-//   server_addr.sin_port = htons(PORTNUM);          // convert to req. endianness
-//
-//   // bind
-//   if(bind(udp_socket, (struct sockaddr *) &server_addr,
-//     sizeof(server_addr) < 0)) {
-//
-//     printf("Communications error: Failed to bind socket.\n");
-//     return -1;
-//   }
-//
-//   // listen
-//   listen(udp_socket, BACKQUEUE);
-//
-//   // accept connections with allocated socket
-//   socklen_t client_length = sizeof(client_addr);
-//   int new_udp_socket = accept(udp_socket,
-//     (struct sockaddr *) &client_addr, &client_length);
-//   if(new_udp_socket < 0) {
-//     printf("Communications error: Failed to accept connection.\n");
-//     return -1;
-//   }
-//
-//   // send
-//   send(new_udp_socket, "Hello, world!\n", 13, 0);
-//
-//   return 1;
-// }
 
 
 // sends calculation from PC to remote raspberry pi
@@ -218,36 +177,20 @@ cufftReal sample[] = {0.0, 0.496882714764706, 0.956769360011055, 1.3458758065781
   return fft_magnitude;
 }
 
-const char* getfield(char* line, int num) {
 
-  const char* tok;
-  for(tok = strtok(line, ";"); tok&& *tok; tok = strtok(NULL, ";\n")) {
+// int load_video() {
+//
+//   const string sample_video = ""
+//   VideoCapture captRefrnc(sample_video);
+//
+// }
 
-    if(!--num) {
-      return tok;
-    }
-  }
-
-  return NULL;
-}
 
 int main() {
 
   char * message = (char *)"C++ default message";
   send_dev_rpi(message);
 
-  // comms_init();
-
-  // FILE* stream = fopen("time_data.txt", "r");
-  //
-  // char line[1024];
-  // while(fgets(line, 1024, stream)) {
-  //
-  //   char * tmp = strdup(line);
-  //   printf("Field 3 would be %s\n", getfield(tmp, 3));
-  //   free(tmp);
-  // }
-  //
   float * fft_magnitude = fft1d();
 
   // clean up
