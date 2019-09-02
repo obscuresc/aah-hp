@@ -28,6 +28,8 @@ Jack Arney 22-06-19
 #include <string.h>
 #include <unistd.h>
 
+#include <opencv2/core.hpp>
+
 #include <cuda_runtime_api.h>
 #include <cufft.h>
 
