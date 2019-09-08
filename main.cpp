@@ -14,7 +14,7 @@ This project is maintained on github.
 
 https://github.com/obscuresc/aah-hp
 
-Jack Arney 22-06-19
+Jack Arney 08-09-19
 *******************************************************************************/
 
 
@@ -29,13 +29,14 @@ Jack Arney 22-06-19
 #include <unistd.h>
 
 #include <opencv2/core.hpp>
+#include <opencv2/highgui.hpp>
 #include <opencv2/videoio.hpp>
+#include <opencv2/imgproc.hpp>
 
 #include <cuda_runtime_api.h>
 #include <cufft.h>
 
 // cuda macros
-#define BATCH         1           // number of ffts to perform
 #define RANK          1           //
 #define IDIST         1           // distance between 1st elements of batches
 #define ISTRIDE       1           // do every ISTRIDEth index
@@ -51,9 +52,22 @@ Jack Arney 22-06-19
 #define BACKQUEUE     5           // max connections in queue
 #define PORTNUM       8080
 
+// video parameters
+struct video_param_t {
+
+  size_t height;
+  size_t width;
+  size_t n_frames;
+};
+
+// heliostat deviation parameters @pixelval or physical
+struct heliostat_dev_t {
+
+  float x;
+  float y;
+};
+
 /******************************************************************************/
-
-
 
 
 // sends calculation from PC to remote raspberry pi
@@ -79,27 +93,15 @@ bool send_dev_rpi(char * message) {
 
   // clean up
   close(client_socket);
-  return 1;
+  return 0;
 }
 
-/*
-steps
-  create plan
-  assemble data (R, C etc)
-  assign plan
-    decide if in place or out of place
-    streamed
-    batches
-    strides
-  set call backs
-  execute
-  clean up
-*/
 
 // perform one dimensional fft
 // takes data location, number of elements in dimesions of in and out data
 float * fft1d() {
 
+  size_t BATCH = 1;
   // assemble data
   // cufftReal sample[] = {2.598076211353316, 3.2402830701637395, 3.8494572900049224, 4.419388724529261, 4.944267282795252, 5.41874215947433, 5.837976382931011, 6.197696125093141, 6.494234270429254, 6.724567799874842, 6.886348608602047, 6.97792744346504, 6.998370716093996, 6.9474700202387565, 6.8257442563389, 6.6344343416615565, 6.37549055993378, 6.051552679431957, 5.665923042211819, 5.222532898817316, 4.725902331664744, 4.181094175657916, 3.5936624057845576, 2.9695955178498603, 2.315255479544737, 1.6373128742041732, 0.9426788984240022, 0.23843490677753865, -0.46823977812093664, -1.1701410542749289, -1.8601134815746807, -2.531123226988873, -3.176329770049035, -3.7891556376344524, -4.363353457155562, -4.893069644570959, -5.3729040779788875, -5.797965148448726, -6.163919626883915, -6.467036838555256, -6.704226694973039, -6.873071195387157, -6.971849076777267, -6.999553361041935, -6.955901620504255, -6.84133885708361, -6.657032965782207, -6.404862828733319, -6.0873991611848375, -5.707878304681281, -5.270169234606201, -4.778734118422206, -4.23858282669252, -3.6552218606153755, -3.0345982167228436, -2.383038761007964, -1.707185730522749, -1.0139290199674, -0.31033594356630245, 0.39642081173600463, 1.0991363072871054, 1.7906468025248339, 2.463902784786862, 3.1120408346390414, 3.728453594100783, 4.306857124485735, 4.841354967187034, 5.326498254347925, 5.757341256627454, 6.129491801786784, 6.439156050110601, 6.683177170206378, 6.859067520906216, 6.965034011197066, 6.999996379650895, 6.963598207007518, 6.85621054964381, 6.678928156888352, 6.433558310743566, 6.122602401787424, 5.749230429076629, 5.317248684008804, 4.831060947586139, 4.295623596650021, 3.7163950767501706, 3.0992802567403803, 2.4505702323708074, 1.7768781925409076, 1.0850720020162676, 0.3822041878858906, -0.3245599564963766, -1.0280154171511335, -1.7209909100394047, -2.3964219877733033, -3.0474230571943477, -3.667357573646071, -4.249905696354359, -4.78912871521179, -5.279529592175676, -5.716109000098287};
 
@@ -177,24 +179,168 @@ cufftReal sample[] = {0.0, 0.496882714764706, 0.956769360011055, 1.3458758065781
   return fft_magnitude;
 }
 
+float * fft_batched(video_param_t video_param) {
 
-// int load_video() {
-//
-//   const string sample_video = ""
-//   VideoCapture captRefrnc(sample_video);
-//
-// }
+  // create plan for performing fft
+  cufftHandle plan;
+  size_t batch = video_param.height * video_param.width;
+  size_t n_points = video_param.n_frames;
+  if (cufftPlan1d(&plan, n_points, CUFFT_R2C, batch) != CUFFT_SUCCESS) {
+    printf("Failed to create 1D plan\n");
+    return nullptr;
+  }
 
+  // load data to gpu
+  cufftReal *idata;
+  cudaMalloc((void**) &idata, sizeof(cufftComplex)*n_points);
+  if (cudaGetLastError() != cudaSuccess) {
+    printf("Failed to allocate memory space for input data.\n");
+    return nullptr;
+  }
 
-int main() {
+  cudaMemcpy(idata, sample, sizeof(sample)/sizeof(double), cudaMemcpyHostToDevice);
+  if (cudaGetLastError() != cudaSuccess) {
+    printf("Failed to load time data to memory.\n");
+    return nullptr;
+  }
 
-  char * message = (char *)"C++ default message";
-  send_dev_rpi(message);
+  // prepare memory for return data
+  cufftComplex *odata;
+  cudaMalloc((void**) &odata, sizeof(cufftComplex)*(n_points/2 + 1));
+  if (cudaGetLastError() != cudaSuccess) {
+    printf("Failed to allocate memory for output data.\n");
+  }
 
-  float * fft_magnitude = fft1d();
+  // perform fft
+  if (cufftExecR2C(plan, idata, odata) != CUFFT_SUCCESS) {
+    printf("Failed to perform fft.\n");
+    return nullptr;
+  }
+
+  // grab data from graphics and print (memcpy waits until complete) cuda memcopy doesn't complete
+  // can return errors from previous cuda calls if they haven't been caught
+  cufftComplex *out_sample;
+  size_t num_bytes = (n_points/2 + 1)*sizeof(cufftComplex);
+  out_sample = new cufftComplex[n_points/2 + 1];
+  cudaMemcpy(out_sample, odata, num_bytes, cudaMemcpyDeviceToHost);
+  int error_value = cudaGetLastError();
+  printf("cudaMemcpy from device state: %i\n", error_value);
+  if(error_value != cudaSuccess) {
+    printf("Failed to pull data from device.\n");
+    return nullptr;
+  }
+
+  // adjust magnitude of fourier coefficiencts appropriately
+  float * fft_magnitude = new float[n_points/2+1];
+  for (size_t i = 0; i < n_points/2 + 1; i++) {
+      fft_magnitude[i] = 2*sqrt(out_sample[i].x*out_sample[i].x +
+                         out_sample[i].y*out_sample[i].y) / n_points;
+  }
+
+  fft_magnitude[0] /= 2;
+
+  // print out for matlab review
+  printf("fft_magnitude = [");
+  for (size_t i = 0; i < n_points/2 + 1; i++) {
+    printf("%f, ", fft_magnitude[i]);
+  }
+  printf("\b\b]\n");
 
   // clean up
-  delete(fft_magnitude);
+  delete(out_sample);
+  cufftDestroy(plan);
+  cudaFree(idata);
+
+  return fft_magnitude;
+}
+
+bool load_video(std::string video_source, cv::Mat * d_mat, video_param_t * video_param) {
+
+  // grab video
+  cv::VideoCapture captRefrnc(video_source);
+  if (!captRefrnc.isOpened()) {
+
+    printf("Could not grab %s\n", video_source.c_str());
+    return -1;
+  }
+
+  // allocate gpu memory
+  cudaMalloc((void**) &d_mat, sizeof(cv::Mat) * video_param->n_frames);
+  if (cudaGetLastError() != cudaSuccess) {
+    printf("Failed to allocate memory space for video data.\n");
+    return -1;
+  }
+
+  // load to gpu
+  cudaMemcpy(d_mat, video_source,
+    size_t(sizeof(cv::Mat) * video_param->n_frames), cudaMemcpyHostToDevice);
+  if (cudaGetLastError() != cudaSuccess) {
+    printf("Failed to load video data to memory.\n");
+    return -1;
+  }
+
+  return 0;
+}
+
+
+int main(int argc, char** argv) {
+
+  // setup processing parameters
+  int heliostat_freq[] = {1, 2, 3};
+  if (argc == 0) {
+    printf("Using default video.\n");
+  }
+
+
+  std::string video_source = "vib.avi";
+  video_param_t video_param;
+
+  cv::Mat * d_mat;
+
+  cufftReal * d_raw;
+  size_t n_threads = 2432;
+  int n_pixel_vals = video_param.height *
+                    video_param.width *
+                    video_param.n_frames;
+  size_t n_blocks =  n_pixel_vals / n_threads;
+  cufftComplex * d_ftd;
+  cufftReal * d_mag;
+
+  cv::Mat images[sizeof(heliostat_freq)/sizeof()];
+
+  while(true) {
+
+    // @will need to update depending on rolling buffer or large batch type
+    // rolling will not be in-place
+
+    if (load_video(video_source, d_mat, &video_param) != 0) {
+
+      printf("Could not load video data.\n");
+      return -1;
+    }
+
+    // prepare for fft @depend on config of gpu
+    cufftReal_convert<<<n_blocks, n_threads>>>(n_pixel_vals, d_mat, d_raw);
+
+    // perform fft on individual pixel streams and adjust to real values
+    // fft_batched(d_raw, d_ftd);
+    // mag_adjust(d_ftd, d_mag);
+
+    // grab bin values for specific frequencies across entire stream
+    // @put into cuda func
+    // image_collate(heliostat_freq, images);
+
+    // perform centroid calculations (in place)
+    // centroid_calc(images, heliostat_dev);
+
+    send_dev_rpi(heliostat_dev);
+
+  }
+
+  // float * fft_magnitude = fft1d();
+
+  // clean up
+  // delete(fft_magnitude);
 
   return 0;
 }
