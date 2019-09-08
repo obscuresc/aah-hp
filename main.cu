@@ -33,8 +33,11 @@ Jack Arney 08-09-19
 #include <opencv2/videoio.hpp>
 #include <opencv2/imgproc.hpp>
 
+#include "src/video_param.h"
+
 #include <cuda_runtime_api.h>
 #include <cufft.h>
+#include "src/cuda.cu"
 
 // cuda macros
 #define RANK          1           //
@@ -52,14 +55,6 @@ Jack Arney 08-09-19
 #define BACKQUEUE     5           // max connections in queue
 #define PORTNUM       8080
 
-// video parameters
-struct video_param_t {
-
-  size_t height;
-  size_t width;
-  size_t n_frames;
-};
-
 // heliostat deviation parameters @pixelval or physical
 struct heliostat_dev_t {
 
@@ -67,11 +62,12 @@ struct heliostat_dev_t {
   float y;
 };
 
+
 /******************************************************************************/
 
 
 // sends calculation from PC to remote raspberry pi
-bool send_dev_rpi(char * message) {
+bool send_dev_rpi(heliostat_dev_t * heliostat_dev) {
 
   // create client socket
   int client_socket;
@@ -88,6 +84,7 @@ bool send_dev_rpi(char * message) {
   server_addr.sin_addr.s_addr = INADDR_ANY;
 
   // create packet and send
+  const char * message = "@message";
   sendto(client_socket, message, strlen(message), MSG_CONFIRM,
         (const struct sockaddr *) &server_addr, sizeof(server_addr));
 
@@ -99,7 +96,8 @@ bool send_dev_rpi(char * message) {
 
 // perform one dimensional fft
 // takes data location, number of elements in dimesions of in and out data
-float * fft1d() {
+/*
+ float * fft1d() {
 
   size_t BATCH = 1;
   // assemble data
@@ -178,81 +176,10 @@ cufftReal sample[] = {0.0, 0.496882714764706, 0.956769360011055, 1.3458758065781
 
   return fft_magnitude;
 }
+*/
 
-float * fft_batched(video_param_t video_param) {
+/******************************************************************************/
 
-  // create plan for performing fft
-  cufftHandle plan;
-  size_t batch = video_param.height * video_param.width;
-  size_t n_points = video_param.n_frames;
-  if (cufftPlan1d(&plan, n_points, CUFFT_R2C, batch) != CUFFT_SUCCESS) {
-    printf("Failed to create 1D plan\n");
-    return nullptr;
-  }
-
-  // load data to gpu
-  cufftReal *idata;
-  cudaMalloc((void**) &idata, sizeof(cufftComplex)*n_points);
-  if (cudaGetLastError() != cudaSuccess) {
-    printf("Failed to allocate memory space for input data.\n");
-    return nullptr;
-  }
-
-  cudaMemcpy(idata, sample, sizeof(sample)/sizeof(double), cudaMemcpyHostToDevice);
-  if (cudaGetLastError() != cudaSuccess) {
-    printf("Failed to load time data to memory.\n");
-    return nullptr;
-  }
-
-  // prepare memory for return data
-  cufftComplex *odata;
-  cudaMalloc((void**) &odata, sizeof(cufftComplex)*(n_points/2 + 1));
-  if (cudaGetLastError() != cudaSuccess) {
-    printf("Failed to allocate memory for output data.\n");
-  }
-
-  // perform fft
-  if (cufftExecR2C(plan, idata, odata) != CUFFT_SUCCESS) {
-    printf("Failed to perform fft.\n");
-    return nullptr;
-  }
-
-  // grab data from graphics and print (memcpy waits until complete) cuda memcopy doesn't complete
-  // can return errors from previous cuda calls if they haven't been caught
-  cufftComplex *out_sample;
-  size_t num_bytes = (n_points/2 + 1)*sizeof(cufftComplex);
-  out_sample = new cufftComplex[n_points/2 + 1];
-  cudaMemcpy(out_sample, odata, num_bytes, cudaMemcpyDeviceToHost);
-  int error_value = cudaGetLastError();
-  printf("cudaMemcpy from device state: %i\n", error_value);
-  if(error_value != cudaSuccess) {
-    printf("Failed to pull data from device.\n");
-    return nullptr;
-  }
-
-  // adjust magnitude of fourier coefficiencts appropriately
-  float * fft_magnitude = new float[n_points/2+1];
-  for (size_t i = 0; i < n_points/2 + 1; i++) {
-      fft_magnitude[i] = 2*sqrt(out_sample[i].x*out_sample[i].x +
-                         out_sample[i].y*out_sample[i].y) / n_points;
-  }
-
-  fft_magnitude[0] /= 2;
-
-  // print out for matlab review
-  printf("fft_magnitude = [");
-  for (size_t i = 0; i < n_points/2 + 1; i++) {
-    printf("%f, ", fft_magnitude[i]);
-  }
-  printf("\b\b]\n");
-
-  // clean up
-  delete(out_sample);
-  cufftDestroy(plan);
-  cudaFree(idata);
-
-  return fft_magnitude;
-}
 
 bool load_video(std::string video_source, cv::Mat * d_mat, video_param_t * video_param) {
 
@@ -272,8 +199,8 @@ bool load_video(std::string video_source, cv::Mat * d_mat, video_param_t * video
   }
 
   // load to gpu
-  cudaMemcpy(d_mat, video_source,
-    size_t(sizeof(cv::Mat) * video_param->n_frames), cudaMemcpyHostToDevice);
+  size_t d_mat_size = sizeof(cv::Mat) * video_param->n_frames;
+  cudaMemcpy(d_mat, (const void *)captRefrnc, d_mat_size, cudaMemcpyHostToDevice);
   if (cudaGetLastError() != cudaSuccess) {
     printf("Failed to load video data to memory.\n");
     return -1;
@@ -281,6 +208,9 @@ bool load_video(std::string video_source, cv::Mat * d_mat, video_param_t * video
 
   return 0;
 }
+
+
+/******************************************************************************/
 
 
 int main(int argc, char** argv) {
@@ -306,7 +236,7 @@ int main(int argc, char** argv) {
   cufftComplex * d_ftd;
   cufftReal * d_mag;
 
-  cv::Mat images[sizeof(heliostat_freq)/sizeof()];
+  cv::Mat images[sizeof(heliostat_freq)/sizeof(int)];
 
   while(true) {
 
@@ -320,10 +250,20 @@ int main(int argc, char** argv) {
     }
 
     // prepare for fft @depend on config of gpu
-    cufftReal_convert<<<n_blocks, n_threads>>>(n_pixel_vals, d_mat, d_raw);
+    cufftReal_convert<<<n_blocks, n_threads>>>(d_mat, d_raw);
 
     // perform fft on individual pixel streams and adjust to real values
-    // fft_batched(d_raw, d_ftd);
+    cudaMalloc((void**) &d_raw, sizeof(cufftComplex)*n_points * batch);
+    if (cudaGetLastError() != cudaSuccess) {
+      printf("Failed to allocate memory space for video data.\n");
+      return -1;
+    }
+    
+    if (fft_batched(d_raw, video_param, d_ftd)) {
+
+      printf("Could not perform fft.\n");
+      return -1;
+    }
     // mag_adjust(d_ftd, d_mag);
 
     // grab bin values for specific frequencies across entire stream
@@ -331,6 +271,7 @@ int main(int argc, char** argv) {
     // image_collate(heliostat_freq, images);
 
     // perform centroid calculations (in place)
+    heliostat_dev_t heliostat_dev[3];
     // centroid_calc(images, heliostat_dev);
 
     send_dev_rpi(heliostat_dev);
