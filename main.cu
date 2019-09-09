@@ -181,7 +181,7 @@ cufftReal sample[] = {0.0, 0.496882714764706, 0.956769360011055, 1.3458758065781
 /******************************************************************************/
 
 
-bool load_video(std::string video_source, cv::Mat * d_mat, video_param_t * video_param) {
+bool load_video(std::string video_source, cufftReal * d_mat, video_param_t * video_param) {
 
   // grab video
   cv::VideoCapture captRefrnc(video_source);
@@ -199,7 +199,7 @@ bool load_video(std::string video_source, cv::Mat * d_mat, video_param_t * video
   }
 
   // load to gpu
-  size_t d_mat_size = sizeof(cv::Mat) * video_param->n_frames;
+  size_t d_mat_size = sizeof(cufftReal) * video_param->n_frames;
   cudaMemcpy(d_mat, (const void *)captRefrnc, d_mat_size, cudaMemcpyHostToDevice);
   if (cudaGetLastError() != cudaSuccess) {
     printf("Failed to load video data to memory.\n");
@@ -250,7 +250,7 @@ int main(int argc, char** argv) {
     }
 
     // prepare for fft @depend on config of gpu
-    cufftReal_convert<<<n_blocks, n_threads>>>(d_mat, d_raw);
+    // cufftReal_convert<<<n_blocks, n_threads>>>(d_mat, d_raw);
 
     // perform fft on individual pixel streams and adjust to real values
     cudaMalloc((void**) &d_raw, sizeof(cufftComplex)*n_points * batch);
@@ -258,7 +258,7 @@ int main(int argc, char** argv) {
       printf("Failed to allocate memory space for video data.\n");
       return -1;
     }
-    
+
     if (fft_batched(d_raw, video_param, d_ftd)) {
 
       printf("Could not perform fft.\n");

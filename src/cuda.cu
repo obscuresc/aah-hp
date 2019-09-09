@@ -16,10 +16,10 @@ cuda functions for gpu processing
 /******************************************************************************/
 
 
-__device__ void cufftReal_convert(cv::Mat * d_mat, cufftReal * d_raw) {
-
-  d_raw[blockIdx.x] = (cufftReal) d_mat->at<double>(blockIdx.x);
-}
+// __device__ void cufftReal_convert(cv::Mat * d_mat, cufftReal * d_raw) {
+//
+//   d_raw[blockIdx.x] = (cufftReal) d_mat->at<double>(blockIdx.x);
+// }
 
 
 bool fft_batched(cufftReal * d_raw, video_param_t video_param, cufftComplex * d_ftd) {
