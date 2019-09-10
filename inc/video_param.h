@@ -1,12 +1,12 @@
 /*******************************************************************************
-structure for video parameter sharing
+                          video param structure
+            holds frame values for video processing functions
 *******************************************************************************/
-
 
 #ifndef VIDEO_PARAM_H
 #define VIDEO_PARAM_H
 
-#include <cstdlib>
+/******************************************************************************/
 
 struct video_param_t {
 
@@ -14,5 +14,7 @@ struct video_param_t {
   size_t width;
   size_t n_frames;
 };
+
+/******************************************************************************/
 
 #endif

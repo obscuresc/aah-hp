@@ -3,59 +3,39 @@
 NVCC = nvcc
 CC = g++
 CC_FLAGS = -c
-CC_LIBS = -lcuda -lcudart -lcufft -lopencv_core -lopencv_highgui -lopencv_imgproc -lopencv_videoio
+CC_LIBS = cuda cudart cufft opencv_core opencv_highgui opencv_imgproc opencv_videoio
+CC_LIBS_PARAMS = $(foreach d,$(CC_LIBS),-l$d)
 
 # other project files, .o files,  header files
 VPATH = /src
 SRC = cuda.cu video_param.h
 OBJ_DIR = obj
-INC_DIR = include
-CUDA = /usr/local/cuda-10.1/include
-CV = /usr/local/include/opencv4
+INC_DIR = inc
+LIB = /usr/local/cuda-10.1/targets/x86_64-linux/lib/
+INC = inc /usr/local/cuda-10.1/lib64 /usr/local/include/opencv4 /usr/local/cuda-10.1/targets/x86_64-linux/lib/
+INC_PARAMS = $(foreach d,$(INC),-I$d)
 
-# object files:
-OBJS = cuda.o
+# print structuring
+PRINT = @echo "\nBuilding: "$@
 
 EXE = aahp
 
 # build
-$(EXE): cuda video_param
-	$(NVCC) -o $@ -I$(CV) -I$(CUDA) $(CC_LIBS) obj/$(OBJS) obj/video_param.o
-
-# main
-main: $(OBJS)
-	$(NVCC) $(CC_FLAGS) $(CC_LIBS) $@
-
-cuda:
-	$(NVCC) $(CC_FLAGS) -I$(CUDA) -I$(CV) $(CC_LIBS) -c src/$@.cu -o $(OBJ_DIR)/$@.o
-
-video_param:
-	$(CC) $(CC_FLAGS) -I$(CUDA) -I$(CV) $(CC_LIBS) -c src/$@.h -o $(OBJ_DIR)/$@.o
-
-
-clean:
-	rm obj/* *.o
-
-# main
-#main:
-#	$(CC) -c $(OBJS) $@
-
-# cuda
-#cuda:
-#	$(CC) $(CC_FLAGS) $(CC_LIBS) $(SRC)/cuda.cu -I$(CUDA) -I$(CV) $@
+# $(EXE): cuda.o main.o
+# 	$(PRINT)
+# 	$(CC) -L$(LIB) $(INC_PARAMS) $(CC_LIBS_PARAMS) obj/cuda.o -o $@
 
 # build
-#$(EXE) : $(OBJS)
-#	$(CC) $(CC_FLAGS) -lcuda -lcudart -lcufft -lopencv_core -lopencv_highgui -lopencv_imgproc -lopencv_videoio $(OBJS) -o  $@
-#
-# compile main .cpp file to object files:
-#$(OBJ_DIR)/%.o : %.cpp
-#	$(CC) $(CC_FLAGS) -lcuda -lcudart -lcufft -lopencv_core -lopencv_highgui -lopencv_imgproc -lopencv_videoio -I$(CU_INC_DIR) -I$(CV_INC_DIR) -c $< -o $@
+$(EXE): main.o cuda.o
+	$(CC) $(CC_FLAGS) $(INC_PARAMS) obj/main.o obj/cuda.o -o  $@
 
-# compile C++ source files to object files:
-#$(OBJ_DIR)/%.o : $(SRC_DIR)/%.cpp $(CU_INC_DIR)/%.h $(CV_INC_DIR)/%.h
-#	$(CC) $(CC_FLAGS) -c $< -o $@
+main.o:
+	$(PRINT)
+	$(NVCC) $(CC_FLAGS) $(INC_PARAMS) -L$(LIB) $(CC_LIBS_PARAMS) -c src/main.cu -o $(OBJ_DIR)/$@
 
-# compile cuda source files to object files:
-#$(OBJ_DIR)/%.cu : $(SRC_DIR)/%.cu $(CU_INC_DIR)/%.h $(CV_INC_DIR)/%.h
-#	$(CC) $(CC_FLAGS) -lcuda -lcudart -lcufft -lopencv_core -lopencv_highgui -lopencv_imgproc -lopencv_videoio -c $< -o $@
+cuda.o:
+	$(PRINT)
+	$(NVCC) $(CC_FLAGS) $(INC_PARAMS) -L$(LIB) $(CC_LIBS_PARAMS) -c src/cuda.cu -o $(OBJ_DIR)/$@
+
+clean:
+	rm obj/*.o
