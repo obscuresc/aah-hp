@@ -2,16 +2,18 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # plt.style.use('ggplot')
-
+plt.rcParams["font.family"] = "serif"
 
 sample_freq = 1000
 sample_period = 1/sample_freq
 
 t = np.arange(0, 2*np.pi, sample_period)
-y1 = np.sin(2*np.pi*1*t)
+y1 = 0.5*np.sin(2*np.pi*1*t)
 y10 = np.sin(2*np.pi*10*t)
 plt.subplot(2, 1, 1)
-plt.plot(t, y1 + y10, t, y1, '--', t, y10, '-.', linewidth = 0.7)
+plt.plot(t, y1 + y10, color='#2F528F', linewidth = 0.7)
+plt.plot(t, y1, '--', color='#FFC000', linewidth = 0.7)
+plt.plot(t, y10, '-.', color='#ED7D31', linewidth = 0.7)
 fig = plt.gcf()
 fig.set_size_inches(8, 4)
 plt.title('Time series with comprising pure waveforms')
@@ -29,7 +31,7 @@ mag = 2*np.abs(Y)/len(t)
 freq = np.linspace(0, len(t), len(t))/(2*np.pi)
 
 plt.subplot(2, 1, 2)
-plt.plot(freq, mag, linewidth = 0.7)
+plt.plot(freq, mag, '#2F528F', linewidth = 0.7)
 fig = plt.gcf()
 fig.set_size_inches(8, 4)
 plt.title('Corresponding Fourier spectrum')
